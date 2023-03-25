@@ -132,14 +132,22 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-yarn-
 
-      - run: yarn --version
-      - run: yarn set version berry
-      - run: yarn install --immutable
-      - run: yarn run build:js:prod
-      - run: yarn run admin:pw:build
-      - run: yarn run admin:pw:test --forbid-only
+      - name: Install yarn deps
+        run: |
+          yarn --version
+          yarn install --immutable
 
-      - uses: jakejarvis/s3-sync-action@master
+      - name: Build admin
+        run: yarn run build:js:prod
+
+      - name: Build admin playwright
+        run: yarn --cwd packages/admin pw:build
+
+      - name: Test admin playwright
+        run: yarn --cwd packages/admin pw:test --forbid-only
+
+      - name: Upload report
+        uses: jakejarvis/s3-sync-action@master
         if: always()
         with:
           args: --acl public-read
@@ -151,7 +159,8 @@ jobs:
           SOURCE_DIR: 'packages/admin/tests/playwright/report'
           DEST_DIR: ${{ github.sha }}
 
-      - uses: phulsechinmay/rewritable-pr-comment@v0.2.1
+      - name: Comment PR
+        uses: phulsechinmay/rewritable-pr-comment@v0.3.0
         if: always() && github.event_name == 'pull_request'
         with:
           message: '[Playwright Test Report](https://contember-admin.fra1.digitaloceanspaces.com/${{ github.sha }}/index.html)'
