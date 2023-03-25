@@ -209,6 +209,9 @@ jobs:
           yarn config set "git-tag-version" "false"
 
       - name: Publish
+        run: |
+          yarn workspaces foreach -v exec -- yarn version --new-version "${GITHUB_REF:11}"
+          yarn workspaces foreach -v run publish --access public --no-git-checks
 
   publish-docker:
     if: (github.event_name == 'push' && github.ref_type == 'tag') || github.event_name == 'workflow_dispatch'
