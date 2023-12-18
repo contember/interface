@@ -1,13 +1,14 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { array, object, ParseError, string } from '../utils/schema'
+import { array, nullable, object, ParseError, string } from '../utils/schema'
 import { BaseController } from './BaseController'
 import type { TenantClient } from '../services/TenantClient'
 import type { S3Manager } from '../services/S3Manager'
 import { ForbiddenError, SystemClient } from '../services/SystemClient'
 
-type PayloadType = ReturnType<typeof PayloadType>
-const PayloadType = object({
-	project: string,
+type DeployPayloadType = ReturnType<typeof DeployPayloadType>
+
+const DeployPayloadType = object({
+	project: nullable(string),
 	files: array(
 		object({
 			path: string,
@@ -23,6 +24,7 @@ interface DeployParams {
 }
 
 export class DeployController extends BaseController<DeployParams> {
+
 	constructor(
 		private readonly tenant: TenantClient,
 		private readonly systemClient: SystemClient,
@@ -31,15 +33,16 @@ export class DeployController extends BaseController<DeployParams> {
 		super()
 	}
 
-	async handle(req: IncomingMessage, res: ServerResponse, { projectGroup }: DeployParams): Promise<void> {
-		let payload: PayloadType
+
+	async handle(req: IncomingMessage, res: ServerResponse, params: DeployParams): Promise<void> {
+		let payload: DeployPayloadType
 
 		try {
-			payload = await this.readJsonBody(req, PayloadType)
+			payload = await this.readJsonBody(req, DeployPayloadType)
 		} catch (e) {
 			if (e instanceof SyntaxError || e instanceof ParseError) {
 				res.writeHead(400)
-				res.end(`Invalid JSON: ${e.message}`)
+				res.end(`Requested with invalid JSON <${e.message}>.`)
 				return
 			} else {
 				throw e
@@ -50,33 +53,61 @@ export class DeployController extends BaseController<DeployParams> {
 
 		if (token === null) {
 			res.writeHead(400)
-			res.end('missing bearer token')
+			res.end('Missing bearer token')
 			return
 		}
 
-		if (!(await this.tenant.hasProjectAccess(token, payload.project, projectGroup))) {
-			res.writeHead(403)
-			res.end(`provided token is not authorized to access project ${payload.project}`)
-			return
-		}
-		try {
-			await this.systemClient.migrate({ token, project: payload.project, projectGroup, migrations: [] })
-		} catch (e) {
-			if (e instanceof ForbiddenError) {
+		// we are supporting two different ways of deploy (project-wide and project-group-wide deployments)
+		if (payload.project === null) {
+			if (!(await this.tenant.canDeployEntrypoint(token, params.projectGroup))) {
 				res.writeHead(403)
-				res.end(`provided token is not authorized to deploy project ${payload.project}`)
+				res.end(`Provided token is not authorized to deploy entrypoint for project group <${params.projectGroup}>`)
 				return
 			}
-			throw e
+		} else {
+			try {
+				// hacky way
+				// try to run empty project migrations, if you don't have permission then you are not allowed deploy project
+				await this.systemClient.migrate(
+					{
+						token: token,
+						project: payload.project,
+						projectGroup: params.projectGroup,
+						migrations: [],
+					},
+				)
+			} catch (e) {
+				if (e instanceof ForbiddenError) {
+					res.writeHead(403)
+					res.end(`provided token is not authorized to deploy project ${payload.project}`)
+					return
+				}
+
+				throw e
+			}
 		}
 
-		const filesWithWrongPath = payload.files.filter(file => !SIMPLE_PATH.test(file.path))
-		if (filesWithWrongPath.length > 0) {
+		await this.handleDeployment(payload, res, params.projectGroup)
+	}
+
+
+	/** checks files consistency and deploy them to project or project-group storage based on request type */
+	private async handleDeployment(payload: DeployPayloadType, res: ServerResponse, projectGroup: string | undefined) {
+		const filesWithDangerousPath = payload.files.filter(
+			file => !SIMPLE_PATH.test(file.path),
+		)
+
+		if (filesWithDangerousPath.length > 0) {
 			res.writeHead(400)
-			res.end('invalid file path:\n' + filesWithWrongPath.map(it => it.path).join('\n'))
+			res.end('Invalid file path:\n' + filesWithDangerousPath
+				.map(it => it.path)
+				.join('\n'),
+			)
 			return
 		}
 
+		// first of all deploy static assets, index.html should be last uploaded page to remove any
+		// change of not-ready page in process of deployment
 		const batches = [
 			payload.files.filter(it => it.path !== 'index.html'),
 			payload.files.filter(it => it.path === 'index.html'),
@@ -85,18 +116,17 @@ export class DeployController extends BaseController<DeployParams> {
 		for (const batch of batches) {
 			await Promise.all(
 				batch.map(async file => {
-					// TODO: handle error?
 					await this.s3.putObject({
-						project: payload.project,
-						projectGroup,
+						project: payload.project ?? undefined,
+						projectGroup: projectGroup,
 						path: file.path,
-						body: new Buffer(file.data, 'base64'),
+						body: Buffer.from(file.data, 'base64'),
 					})
 				}),
 			)
 		}
 
 		res.writeHead(200)
-		res.end('OK')
+		res.end()
 	}
 }

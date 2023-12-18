@@ -43,7 +43,7 @@ export class S3Manager {
 	}
 
 	async putObject({ project, projectGroup, path, body }: {
-		project: string,
+		project?: string,
 		projectGroup?: string,
 		path: string,
 		body: Buffer,

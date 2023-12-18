@@ -23,10 +23,13 @@ export class S3LocationResolver {
 		if (!projectGroup && (this.bucket.includes(ProjectGroupResolver.GROUP_PLACEHOLDER) || this.prefix.includes(ProjectGroupResolver.GROUP_PLACEHOLDER))) {
 			throw new S3IncompleteLocationError('project group is not defined')
 		}
+
 		const replace = (value: string) => (
 			value.replace(ProjectGroupResolver.GROUP_PLACEHOLDER, projectGroup!).replace(S3LocationResolver.PROJECT_PLACEHOLDER, project ?? '')
 		)
+
 		const prefix = normalizePath(replace(this.prefix))
+
 		return {
 			bucket: replace(this.bucket),
 			prefix: prefix ? prefix + '/' : '',

@@ -6,23 +6,21 @@ import { ProjectGroupResolver } from './ProjectGroupResolver'
 import { DeployController } from '../controllers/DeployController'
 import { MeController } from '../controllers/MeController'
 import { ApiController } from '../controllers/ApiController'
-import { LoginController } from '../controllers/LoginController'
 import { LegacyController } from '../controllers/LegacyController'
 import { PanelController } from '../controllers/PanelController'
-import { ProjectController } from '../controllers/ProjectController'
+import { AssetController } from '../controllers/AssetController'
 
 export class Router {
+
 	constructor(
 		private readonly projectGroupResolver: ProjectGroupResolver,
 		private readonly deployController: DeployController,
 		private readonly meController: MeController,
 		private readonly apiController: ApiController,
-		private readonly loginController: LoginController,
 		private readonly legacyController: LegacyController,
 		private readonly panelController: PanelController,
-		private readonly projectController: ProjectController,
-	) {
-	}
+		private readonly assetController: AssetController,
+	) {}
 
 	async handle(req: IncomingMessage, res: ServerResponse) {
 		try {
@@ -44,20 +42,15 @@ export class Router {
 				case '_panel':
 					return await this.panelController.handle(req, res)
 
-				case '':
-				case '_static':
-				case 'favicon.ico':
-				case 'robots.txt':
-					return await this.loginController.handle(req, res, { projectGroup })
-
 				case 'p':
 				case 'projects':
 					return await this.legacyController.handle(req, res)
 
 				default:
-					return await this.projectController.handle(req, res, { projectSlug: prefix, path: rest.join('/'), projectGroup })
+					return await this.assetController.handle(
+						req, res, { project: prefix, projectGroup: projectGroup, path: rest.join('/') },
+					)
 			}
-
 		} catch (e) {
 			console.error(e)
 

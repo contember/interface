@@ -2,9 +2,6 @@ import { Builder } from '@contember/dic'
 import { env } from './env'
 import { S3Client } from '@aws-sdk/client-s3'
 import { createClient as createRedisClient } from 'redis'
-import { LoginController } from './controllers/LoginController'
-import { DeployController } from './controllers/DeployController'
-import { ProjectController } from './controllers/ProjectController'
 import { TenantClient } from './services/TenantClient'
 import { ApiController } from './controllers/ApiController'
 import * as http from 'node:http'
@@ -23,6 +20,8 @@ import { SystemClient } from './services/SystemClient'
 import { ConfigResolver } from './services/ConfigResolver'
 import { Router } from './services/Router'
 import { customConfig } from './config'
+import { AssetController } from './controllers/AssetController'
+import { DeployController } from './controllers/DeployController'
 
 export default new Builder({})
 	.addService('env', env)
@@ -95,16 +94,12 @@ export default new Builder({})
 		return new StaticFileHandler(env.CONTEMBER_PUBLIC_DIR)
 	})
 
-	.addService('loginController', ({ staticFileHandler, configResolver }) => {
-		return new LoginController(staticFileHandler, configResolver)
-	})
-
 	.addService('deployController', ({ tenant, systemClient, s3 }) => {
 		return new DeployController(tenant, systemClient, s3)
 	})
 
-	.addService('projectController', ({ tenant, s3 }) => {
-		return new ProjectController(tenant, s3)
+	.addService('assetController', ({ tenant, s3, configResolver, staticFileHandler  }) => {
+		return new AssetController(s3, tenant, configResolver, staticFileHandler)
 	})
 
 	.addService('apiController', ({ env, apiEndpointResolver }) => {
@@ -129,16 +124,15 @@ export default new Builder({})
 		}
 	})
 
-	.addService('router', ({ loginController, deployController, projectController, apiController, meController, legacyController, panelController, projectGroupResolver }) => {
+	.addService('router', ({ deployController, apiController, meController, legacyController, panelController, projectGroupResolver, assetController }) => {
 		return new Router(
 			projectGroupResolver,
 			deployController,
 			meController,
 			apiController,
-			loginController,
 			legacyController,
 			panelController,
-			projectController,
+			assetController,
 		)
 	})
 

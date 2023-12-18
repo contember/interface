@@ -1,5 +1,5 @@
 import { Response } from 'node-fetch'
-import { array, nullable, object, string } from '../utils/schema'
+import { array, boolean, nullable, object, string } from '../utils/schema'
 import { ApiRequest, ApiRequestSender } from './ApiRequestSender'
 
 const ProjectBySlugResponseType = object({
@@ -43,6 +43,16 @@ const MeResponseType = object({
 	}),
 })
 
+const MePermissionsResponseType = object({
+	data: object({
+		me: object({
+			permissions: object({
+					canDeployEntrypoint: boolean,
+				}),
+		}),
+	}),
+})
+
 type TenantApiRequest = Omit<ApiRequest, 'path'>
 
 export class TenantClient {
@@ -72,6 +82,36 @@ export class TenantClient {
 
 		const payload = ProjectBySlugResponseType(await response.json())
 		return payload.data.projectBySlug !== null
+	}
+
+
+	async canDeployEntrypoint(token: string, projectGroup: string | undefined): Promise<boolean> {
+		const response = await this.request({
+			token,
+			projectGroup,
+			query: `
+				query {
+					me {
+						permissions {
+							canDeployEntrypoint
+						}
+					}
+				}
+			`,
+		})
+
+		if (!response.ok) {
+			console.error(
+				'Looks like you are using version of admin server that needs engine with "canDeployEntrypoint" permission field. ' +
+				'Resolve issue with upgrade of engine version.',
+			)
+
+			return false
+		}
+
+		const payload = MePermissionsResponseType(await response.json())
+
+		return payload.data.me.permissions.canDeployEntrypoint
 	}
 
 
