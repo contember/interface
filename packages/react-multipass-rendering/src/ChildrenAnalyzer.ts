@@ -1,5 +1,6 @@
 import { assertNever } from '@contember/utilities'
-import type { ElementType, ReactElement, ReactNode } from 'react'
+import { ElementType, ReactElement, ReactNode, useReducer } from 'react'
+import * as React from 'react'
 import type { BranchNodeList } from './BranchNodeList'
 import { ChildrenAnalyzerError } from './ChildrenAnalyzerError'
 import type { ChildrenAnalyzerOptions } from './ChildrenAnalyzerOptions'
@@ -66,17 +67,30 @@ export class ChildrenAnalyzer<
 		children: ReactNode,
 		initialStaticContext: StaticContext,
 	): Array<AllLeavesRepresentation | AllBranchNodesRepresentation> {
+		if ('__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED' in React) {
+			const { ReactCurrentDispatcher } = (React as any).__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED
+			const originalCurrentDispatcher = ReactCurrentDispatcher.current
+			ReactCurrentDispatcher.current = {
+				...originalCurrentDispatcher,
+				...staticRenderReactDispatcher,
+			}
+			const result = this.doProcessChildren(children, initialStaticContext)
+			ReactCurrentDispatcher.current = originalCurrentDispatcher
+			return result
+		}
+		return this.doProcessChildren(children, initialStaticContext)
+	}
+
+	public doProcessChildren(
+		children: ReactNode,
+		initialStaticContext: StaticContext,
+	): Array<AllLeavesRepresentation | AllBranchNodesRepresentation> {
+
 		const processed = this.processNode(children, initialStaticContext, [])
 
-		const rawResult: Array<AllLeavesRepresentation | AllBranchNodesRepresentation | undefined> = Array.isArray(
-			processed,
-		)
-			? processed
-			: [processed]
+		const rawResult = Array.isArray(processed) ? processed : [processed]
 
-		return rawResult.filter(
-			(item): item is AllLeavesRepresentation | AllBranchNodesRepresentation => item !== undefined,
-		)
+		return rawResult.filter((item): item is AllLeavesRepresentation | AllBranchNodesRepresentation => item !== undefined)
 	}
 
 	private processNode(
@@ -257,4 +271,47 @@ export class ChildrenAnalyzer<
 
 		return processedChildren
 	}
+}
+
+let id = 0
+const staticRenderReactDispatcher = {
+	useCallback: (cb: any) => {
+		return cb
+	},
+	useDebugValue: () => {
+		// do nothing
+	},
+	useEffect: () => {
+		// do nothing
+	},
+	useImperativeHandle: () => {
+		// do nothing
+	},
+	useLayoutEffect: () => {
+		// do nothing
+	},
+	useMemo: (value: () => any) => {
+		return value()
+	},
+	useReducer: (reducer: any, initializerArg: any, initializer: any) => {
+		return initializer ? [initializer(initializerArg), () => {
+		}] : [initializerArg, () => {
+		}]
+	},
+	useRef: (initialValue: any) => {
+		return { current: initialValue }
+	},
+	useState: (initialState: any) => {
+		return [typeof initialState === 'function' ? initialState() : initialState, () => {
+		}]
+	},
+	useDeferredValue: (value: any) => {
+		return value
+	},
+	useId() {
+		return `id-${id++}`
+	},
+	useInsertionEffect() {
+		// do nothing
+	},
 }

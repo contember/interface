@@ -6,7 +6,7 @@
 
 import type { ElementType } from 'react';
 import type { ReactElement } from 'react';
-import type { ReactNode } from 'react';
+import { ReactNode } from 'react';
 import type { ReactText } from 'react';
 
 // @public (undocumented)
@@ -47,6 +47,8 @@ export class ChildrenAnalyzer<AllLeavesRepresentation = any, AllBranchNodesRepre
     constructor(leaves: LeafList<AllLeavesRepresentation, StaticContext>, options?: Partial<ChildrenAnalyzerOptions>);
     // Warning: (ae-forgotten-export) The symbol "BranchNodeList" needs to be exported by the entry point index.d.ts
     constructor(leaves: LeafList<AllLeavesRepresentation, StaticContext>, branchNodes: BranchNodeList<AllLeavesRepresentation, AllBranchNodesRepresentation, StaticContext>, options?: Partial<ChildrenAnalyzerOptions>);
+    // (undocumented)
+    doProcessChildren(children: ReactNode, initialStaticContext: StaticContext): Array<AllLeavesRepresentation | AllBranchNodesRepresentation>;
     // (undocumented)
     processChildren(children: ReactNode, initialStaticContext: StaticContext): Array<AllLeavesRepresentation | AllBranchNodesRepresentation>;
 }
