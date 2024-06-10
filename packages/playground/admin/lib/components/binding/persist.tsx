@@ -1,13 +1,14 @@
-import { PersistTrigger, SugaredRelativeSingleField, useField } from '@contember/interface'
+import { PersistTrigger, SugaredRelativeSingleField, useCurrentRequest, useField } from '@contember/interface'
 import { Button } from '../ui/button'
 import { Loader } from '../ui/loader'
-import { ReactElement, ReactNode, useCallback, useEffect } from 'react'
+import { ReactElement, ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { ToastContent, useShowToast } from '../ui/toast'
 import { ErrorPersistResult, SuccessfulPersistResult } from '@contember/binding'
 import { Slot } from '@radix-ui/react-slot'
 import { useErrorFormatter } from '../errors'
 import { usePersist } from '@contember/react-binding'
 import { dict } from '../../../lib/dict'
+import { useRedirect } from '@contember/react-routing'
 
 export const FeedbackTrigger = (props: { children: ReactElement }) => {
 	return <Slot {...props} {...usePersistFeedbackHandlers()} />
@@ -57,6 +58,14 @@ export const usePersistErrorHandler = () => {
 
 export const usePersistSuccessHandler = () => {
 	const showToast = useShowToast()
+	const redirect = useRedirect()
+	const [initialRequest] = useState(useCurrentRequest())
+	const [forceRedirect, setForceRedirect] = useState(false)
+	useEffect(() => {
+		if (forceRedirect) {
+			redirect(it => !it || it !== initialRequest ? it : { ...it })
+		}
+	}, [forceRedirect, initialRequest, redirect])
 
 	return useCallback((result: SuccessfulPersistResult) => {
 		showToast(
@@ -66,12 +75,8 @@ export const usePersistSuccessHandler = () => {
 				type: 'success',
 			})
 		if (result.type === 'justSuccess' && result.afterPersistError) {
-			showToast(
-				<ToastContent
-					title={dict.persist.afterPersistError}
-				/>, {
-					type: 'warning',
-				})
+			// deliberately redirecting in useEffect so custom redirects have a priority
+			setForceRedirect(true)
 		}
 	}, [showToast])
 }
